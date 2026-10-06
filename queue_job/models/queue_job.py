@@ -139,7 +139,7 @@ class QueueJob(models.Model):
             self._cr.execute(
                 "CREATE INDEX queue_job_identity_key_state_partial_index "
                 "ON queue_job (identity_key) WHERE state in ('pending', "
-                "'enqueued', 'wait_dependencies') AND identity_key IS NOT NULL;"
+                "'enqueued') AND identity_key IS NOT NULL;"
             )
 
     @api.depends("records")
@@ -269,10 +269,10 @@ class QueueJob(models.Model):
                 lambda records: records.env.user.id != vals["user_id"]
             )
 
-        result = super().write(vals)
-
         if vals.get("state") == "failed":
             self._message_post_on_failure()
+
+        result = super().write(vals)
 
         for record in different_user_jobs:
             # the user is stored in the env of the record, but we still want to
@@ -344,7 +344,7 @@ class QueueJob(models.Model):
     def requeue(self):
         jobs_to_requeue = self.filtered(lambda job_: job_.state != WAIT_DEPENDENCIES)
         jobs_to_requeue._change_job_state(PENDING)
-        return jobs_to_requeue
+        return True
 
     def _message_post_on_failure(self):
         # subscribe the users now to avoid to subscribe them
@@ -417,23 +417,20 @@ class QueueJob(models.Model):
                     break
         return True
 
-    def requeue_stuck_jobs(self, enqueued_delta=1, started_delta=0):
+    def requeue_stuck_jobs(self, enqueued_delta=5, started_delta=0):
         """Fix jobs that are in a bad states
 
         :param in_queue_delta: lookup time in minutes for jobs
-                               that are in enqueued state,
-                               0 means that it is not checked
+                                that are in enqueued state
 
         :param started_delta: lookup time in minutes for jobs
-                              that are in started state,
-                              0 means that it is not checked,
-                              -1 will use `--limit-time-real` config value
+                                that are in enqueued state,
+                                0 means that it is not checked
         """
-        if started_delta == -1:
-            started_delta = (config["limit_time_real"] // 60) + 1
-        return self._get_stuck_jobs_to_requeue(
+        self._get_stuck_jobs_to_requeue(
             enqueued_delta=enqueued_delta, started_delta=started_delta
         ).requeue()
+        return True
 
     def _get_stuck_jobs_domain(self, queue_dl, started_dl):
         domain = []

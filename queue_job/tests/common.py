@@ -94,7 +94,7 @@ def trap_jobs():
     with mock.patch(
         "odoo.addons.queue_job.delay.Job",
         name="Job Class",
-        unsafe=True,
+        auto_spec=True,
     ) as job_cls_mock:
         with JobsTrap(job_cls_mock) as trap:
             yield trap
@@ -227,12 +227,12 @@ class JobsTrap:
             return job.graph_uuid or ""
 
         sorted_jobs = sorted(self.enqueued_jobs, key=by_graph)
-        self.enqueued_jobs = []
         for graph_uuid, jobs in groupby(sorted_jobs, key=by_graph):
             if graph_uuid:
                 self._perform_graph_jobs(jobs)
             else:
                 self._perform_single_jobs(jobs)
+        self.enqueued_jobs = []
 
     def _perform_single_jobs(self, jobs):
         # we probably don't want to replicate a perfect order here, but at

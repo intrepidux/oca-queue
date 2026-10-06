@@ -75,7 +75,8 @@ class PriorityQueue(object):
     def add(self, o):
         if o is None:
             raise ValueError()
-        self._removed.discard(o)
+        if o in self._removed:
+            self._removed.remove(o)
         if o in self._known:
             return
         self._known.add(o)
@@ -86,7 +87,8 @@ class PriorityQueue(object):
             raise ValueError()
         if o not in self._known:
             return
-        self._removed.add(o)
+        if o not in self._removed:
+            self._removed.add(o)
 
     def pop(self):
         while True:
@@ -100,6 +102,24 @@ class PriorityQueue(object):
                 self._removed.remove(o)
             else:
                 return o
+
+
+class SafeSet(set):
+    """A set that does not raise KeyError when removing non-existent items.
+
+    >>> s = SafeSet()
+    >>> s.remove(1)
+    >>> len(s)
+    0
+    >>> s.remove(1)
+    """
+
+    def remove(self, o):
+        # pylint: disable=missing-return,except-pass
+        try:
+            super().remove(o)
+        except KeyError:
+            pass
 
 
 @total_ordering
@@ -388,8 +408,8 @@ class Channel(object):
             self.parent.children[name] = self
         self.children = {}
         self._queue = ChannelQueue()
-        self._running = set()
-        self._failed = set()
+        self._running = SafeSet()
+        self._failed = SafeSet()
         self._pause_until = 0  # utc seconds since the epoch
         self.capacity = capacity
         self.throttle = throttle  # seconds
@@ -443,8 +463,8 @@ class Channel(object):
     def remove(self, job):
         """Remove a job from the channel."""
         self._queue.remove(job)
-        self._running.discard(job)
-        self._failed.discard(job)
+        self._running.remove(job)
+        self._failed.remove(job)
         if self.parent:
             self.parent.remove(job)
 
@@ -464,8 +484,8 @@ class Channel(object):
         """
         if job not in self._queue:
             self._queue.add(job)
-            self._running.discard(job)
-            self._failed.discard(job)
+            self._running.remove(job)
+            self._failed.remove(job)
             if self.parent:
                 self.parent.remove(job)
             _logger.debug("job %s marked pending in channel %s", job.uuid, self)
@@ -478,7 +498,7 @@ class Channel(object):
         if job not in self._running:
             self._queue.remove(job)
             self._running.add(job)
-            self._failed.discard(job)
+            self._failed.remove(job)
             if self.parent:
                 self.parent.set_running(job)
             _logger.debug("job %s marked running in channel %s", job.uuid, self)
@@ -487,7 +507,7 @@ class Channel(object):
         """Mark the job as failed."""
         if job not in self._failed:
             self._queue.remove(job)
-            self._running.discard(job)
+            self._running.remove(job)
             self._failed.add(job)
             if self.parent:
                 self.parent.remove(job)

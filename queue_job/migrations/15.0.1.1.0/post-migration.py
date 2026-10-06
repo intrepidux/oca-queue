@@ -8,9 +8,10 @@ _logger = logging.getLogger(__name__)
 
 
 def migrate(cr, version):
-    env = api.Environment(cr, SUPERUSER_ID, {})
-    _logger.info("Computing exception name for failed jobs")
-    _compute_jobs_new_values(env)
+    with api.Environment.manage():
+        env = api.Environment(cr, SUPERUSER_ID, {})
+        _logger.info("Computing exception name for failed jobs")
+        _compute_jobs_new_values(env)
 
 
 def _compute_jobs_new_values(env):
